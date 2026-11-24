@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tacot Edit</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <div id="splash" class="splash" aria-hidden="true">
+      <div class="splash-inner">
+        <span class="splash-mark">
+          <span class="mark-play"></span>
+          <span class="mark-bars"></span>
+        </span>
+        <span class="splash-name">Tacot Edit</span>
+        <span class="splash-tag">Studio-grade editing. Nothing to buy, nothing to sign into.</span>
+        <span class="splash-track"><span class="splash-fill"></span></span>
+      </div>
+    </div>
+
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">
+            <span class="mark-play"></span>
+            <span class="mark-bars"></span>
+          </span>
+          <span class="brand-text">
+            <strong>Tacot Edit</strong>
+            <em>Colour suite</em>
+          </span>
+        </div>
+
+        <div class="topbar-project">
+          <input id="projectName" class="project-name" value="Untitled Project" spellcheck="false" aria-label="Project name" />
+          <span id="saveState" class="save-state saved">All changes saved</span>
+        </div>
+
+        <button id="paletteBtn" class="cmdk" type="button" title="Search every action (Ctrl+K)">
+          <span class="cmdk-glyph">⌕</span>
+          <span class="cmdk-text">Search actions</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
+        <button id="updateChip" class="update-chip" type="button" hidden title="A newer version of Tacot Edit is available">
+          <span class="update-dot"></span>
+          <span id="updateLabel">Update available</span>
+        </button>
+
+        <div class="topbar-controls">
+          <label class="chip">
+            <span>Canvas</span>
+            <select id="aspectSelect" aria-label="Aspect ratio"></select>
+          </label>
+          <label class="chip">
+            <span>Rate</span>
+            <select id="fpsSelect" aria-label="Frame rate">
+              <option value="24">24 fps</option>
+              <option value="25">25 fps</option>
+              <option value="30" selected>30 fps</option>
+              <option value="50">50 fps</option>
+              <option value="60">60 fps</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="undoBtn" class="btn btn-icon" title="Undo (Ctrl+Z)">↺</button>
+          <button id="redoBtn" class="btn btn-icon" title="Redo (Ctrl+Shift+Z)">↻</button>
+          <button id="importBtn" class="btn btn-ghost" title="Import media">Import</button>
+          <button id="saveBtn" class="btn btn-ghost" title="Save project (Ctrl+S)">Save</button>
+          <button id="newBtn" class="btn btn-ghost" title="New project">New</button>
+          <button id="exportBtn" class="btn btn-accent" title="Render the sequence">Export</button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="left">
+          <nav id="rail" class="rail" aria-label="Libraries"></nav>
+          <div id="panelBody" class="panel-body"></div>
+        </aside>
+
+        <section class="stage">
+          <div class="stage-head">
+            <div class="stage-title">
+              <span class="dot"></span>
+              Program monitor
+              <span id="stageStats" class="stage-stats"></span>
+            </div>
+            <div class="stage-actions">
+              <button id="compareBtn" class="btn btn-mini" title="Bypass filters and effects">Compare</button>
+              <button id="guidesBtn" class="btn btn-mini is-on" title="Title-safe guides">Guides</button>
+              <button id="loopBtn" class="btn btn-mini" title="Loop playback">Loop</button>
+            </div>
+          </div>
+
+          <div class="preview-wrap">
+            <div class="preview-frame">
+              <canvas id="canvas" width="1920" height="1080"></canvas>
+              <div id="emptyState" class="empty-state">
+                <div class="hero-badge">Studio edition · everything included</div>
+                <h3>Make the cut you keep rewatching</h3>
+                <p>Drop a clip anywhere in this window. No account, no watermark, no export limit — just the tools.</p>
+                <div class="hero-actions">
+                  <button class="btn btn-accent" id="emptyImport">Import media</button>
+                  <button class="btn btn-ghost" id="emptyText">Add a title</button>
+                  <button class="btn btn-ghost" id="emptySubtitles">Auto subtitles</button>
+                </div>
+                <div class="hero-keys">
+                  <span><kbd>Space</kbd> play</span>
+                  <span><kbd>Ctrl K</kbd> commands</span>
+                  <span><kbd>Ctrl B</kbd> split</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="transport">
+            <div class="transport-left">
+              <button id="prevFrame" class="btn btn-icon" title="Previous frame (←)">◀</button>
+              <button id="playBtn" class="btn btn-play" aria-label="Play" title="Play / pause (Space)">
+                <span class="play-glyph"></span>
+              </button>
+              <button id="nextFrame" class="btn btn-icon" title="Next frame (→)">▶</button>
+            </div>
+            <div class="transport-time">
+              <span id="timecode" class="timecode">00:00:00:00</span>
+              <span class="time-sep">/</span>
+              <span id="durationLabel" class="time-total">0:00</span>
+            </div>
+            <div class="transport-right">
+              <label class="volume-control" title="Master volume">
+                <span class="volume-icon">🔊</span>
+                <input id="masterVolume" type="range" min="0" max="100" value="100" aria-label="Master volume" />
+              </label>
+              <span class="hint">Ctrl+B split · I/O range · Space play</span>
+            </div>
+          </div>
+        </section>
+
+        <aside id="inspector" class="inspector" aria-label="Inspector"></aside>
+      </div>
+
+      <section id="timeline" class="timeline">
+        <div class="tl-toolbar">
+          <div class="tl-tools-left">
+            <button id="tlRazor" class="btn btn-mini" title="Razor tool (click a clip to split)">✂ Razor</button>
+            <button id="tlSnap" class="btn btn-mini is-on" title="Snap to clip edges">Snap</button>
+            <button id="tlAddTrack" class="btn btn-mini" title="Add an overlay track">+ Track</button>
+          </div>
+          <div class="tl-tools-mid">
+            <span id="tlTime" class="tl-time">00:00:00:00</span>
+            <span id="tlDuration" class="tl-duration">0:00 · 0 clips</span>
+          </div>
+          <div class="tl-tools-right">
+            <button id="tlZoomOut" class="btn btn-icon btn-tiny" title="Zoom out">−</button>
+            <span id="tlZoomLabel" class="tl-zoom">72 px/s</span>
+            <button id="tlZoomIn" class="btn btn-icon btn-tiny" title="Zoom in">+</button>
+          </div>
+        </div>
+        <div id="tlScroll" class="tl-scroll">
+          <div id="tlContent" class="tl-content">
+            <div id="tlRuler" class="tl-ruler"></div>
+            <div id="tlSnapGuide" class="tl-snap-guide"></div>
+            <div id="tlPlayhead" class="tl-playhead"><span class="tl-playhead-grip"></span></div>
+            <div id="tlTracks" class="tl-tracks"></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="statusbar">
+        <span class="status-chip"><span class="status-dot"></span>All features unlocked</span>
+        <span class="status-note">No account · no watermark · no export limits</span>
+        <span id="statusProject" class="status-info">1920×1080 · 30 fps · 0:00 · 0 clips</span>
+        <span id="statusEngine" class="status-info status-engine">Speech engine: checking…</span>
+        <span class="status-keys"><kbd>Ctrl K</kbd> commands</span>
+      </footer>
+    </div>
+
+    <div id="palette" class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div class="palette-card">
+        <div class="palette-head">
+          <span class="palette-glyph">⌕</span>
+          <input id="paletteInput" class="palette-input" placeholder="Search actions, panels and tools…" autocomplete="off" spellcheck="false" aria-label="Search actions" />
+          <kbd>Esc</kbd>
+        </div>
+        <div id="paletteList" class="palette-list" role="listbox" aria-label="Actions"></div>
+        <div class="palette-foot">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> run</span>
+          <span>Everything here is free</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="dropOverlay" class="drop-overlay">
+      <div class="drop-card">
+        <span class="drop-icon">⤓</span>
+        <strong>Drop to import</strong>
+        <span>Video, audio and images are copied into your Tacot Edit library.</span>
+      </div>
+    </div>
+
+    <div id="exportModal" class="modal" role="dialog" aria-modal="true" aria-label="Export sequence">
+      <div class="modal-card">
+        <header class="modal-head">
+          <h2>Export sequence</h2>
+          <button id="exportClose" class="btn btn-icon" aria-label="Close">×</button>
+        </header>
+        <div class="modal-body">
+          <label class="stack">
+            <span>File name</span>
+            <input id="exportName" class="text-input" value="Tacot Edit Export" spellcheck="false" />
+          </label>
+          <div class="modal-row">
+            <label class="stack">
+              <span>Format</span>
+              <select id="exportFormat"></select>
+            </label>
+            <label class="stack">
+              <span>Quality</span>
+              <select id="exportQuality">
+                <option value="draft">Draft · fast</option>
+                <option value="standard" selected>Standard</option>
+                <option value="high">High</option>
+                <option value="master">Master</option>
+              </select>
+            </label>
+          </div>
+          <div class="modal-row">
+            <label class="stack">
+              <span>Range</span>
+              <select id="exportRangeSelect">
+                <option value="whole" selected>Whole sequence</option>
+                <option value="range">In / Out range</option>
+              </select>
+            </label>
+            <div class="modal-info">
+              <div><span>Selected</span><strong id="exportRange"></strong></div>
+              <div><span>Canvas</span><strong id="exportResolution"></strong></div>
+            </div>
+          </div>
+          <div class="progress-shell">
+            <div id="exportProgress" class="progress-bar"></div>
+          </div>
+          <p id="exportStatus" class="export-status">Ready</p>
+          <div id="exportResult" class="export-result"></div>
+        </div>
+        <footer class="modal-foot">
+          <button id="exportStill" class="btn btn-ghost btn-still">Save still (PNG)</button>
+          <button id="exportCancel" class="btn btn-ghost">Cancel</button>
+          <button id="exportStart" class="btn btn-accent">Start render</button>
+        </footer>
+      </div>
+    </div>
+
+    <div id="toastStack" class="toast-stack" aria-live="polite"></div>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

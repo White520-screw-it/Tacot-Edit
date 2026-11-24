@@ -1,0 +1,24 @@
+Tacot Edit — terms of use
+
+Tacot Edit is free. Download it, install it, and use it for anything — personal,
+commercial, whatever you like — at no cost and with no account.
+
+Please don't:
+  - redistribute modified builds, or builds you made from this source, as Tacot Edit
+  - bundle Tacot Edit into another product, installer, or service
+  - rename it, remove this notice, or present it as your own work
+
+Linking to https://editor.tacot.org/ is always welcome, and the unmodified
+installer may be mirrored as long as it stays byte-identical — the SHA-256 of each
+release is published on the download page, along with its version, so anyone can
+check what they are running.
+
+The name "Tacot Edit" and its logo belong to the Tacot project.
+
+Bundled components keep their own licences, and their licence files are installed
+next to them:
+  - FFmpeg 9.1 — GPLv3 — source: https://ffmpeg.org/download.html
+  - whisper.cpp and OpenAI's Whisper base.en model — MIT
+
+This software is provided as is, without warranty of any kind, express or implied.
+Use it at your own risk.

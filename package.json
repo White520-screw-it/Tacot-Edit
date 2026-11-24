@@ -1,0 +1,17 @@
+{
+  "name": "tacot-edit",
+  "private": true,
+  "version": "0.2.2",
+  "description": "Tacot Edit — multi-track timeline video editor",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build --no-bundle",
+    "installer": "tauri build",
+    "icons": "node tools/make-icons.mjs",
+    "test": "node --test tools/model.test.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
