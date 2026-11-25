@@ -184,8 +184,12 @@ export function createTimeline({ store, onSelect, onSeek }) {
 
     const left = document.createElement('div');
     left.className = 'clip-handle clip-handle-left';
+    left.title = 'Drag to trim the clip start';
+    left.setAttribute('aria-label', 'Trim clip start');
     const right = document.createElement('div');
     right.className = 'clip-handle clip-handle-right';
+    right.title = 'Drag to trim the clip end';
+    right.setAttribute('aria-label', 'Trim clip end');
     node.append(left, right);
     return node;
   }
@@ -324,7 +328,11 @@ export function createTimeline({ store, onSelect, onSeek }) {
     event.preventDefault();
     const startX = event.clientX;
     const startY = event.clientY;
-    const node = event.currentTarget.closest('.clip') || event.currentTarget;
+    // `currentTarget` is the timeline container because the listener is
+    // delegated. Use the actual clip under the pointer so trim previews resize
+    // the clip itself instead of stretching the entire timeline.
+    const node = event.target.closest('.clip');
+    if (!node) return;
     const group =
       mode === 'move'
         ? store

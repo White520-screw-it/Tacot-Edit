@@ -1,5 +1,7 @@
 // Platform bridge: Tauri commands, native import, media probing, thumbnails and waveform peaks.
-import { invoke as tauriInvoke, convertFileSrc } from './tauri.js';
+import { invoke as tauriInvoke, convertFileSrc, hasTauri as tauriAvailable } from './tauri.js';
+
+export const hasTauri = tauriAvailable;
 
 const VIDEO_EXT = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', 'wmv', 'mpeg', 'mpg'];
 const AUDIO_EXT = ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'flac', 'opus'];

@@ -190,6 +190,31 @@ textarea {
   color: var(--faint);
   padding-left: 9px;
 }
+
+.storage-badge {
+  color: var(--muted, #9398a8);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.storage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.drive-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 4px 7px;
+  font-size: 10px;
+}
+
+.drive-button:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
 .save-state.dirty {
   color: var(--accent-soft);
 }
@@ -1879,15 +1904,32 @@ input[type="range"]:disabled {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 8px;
+  width: 14px;
   cursor: ew-resize;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent);
-  opacity: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.04));
+  opacity: 0.72;
   transition: opacity 0.12s ease;
+  z-index: 3;
+}
+.clip-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  width: 3px;
+  height: 22px;
+  border-left: 1px solid rgba(255, 255, 255, 0.8);
+  border-right: 1px solid rgba(255, 255, 255, 0.8);
+  transform: translateY(-50%);
+  opacity: 0.8;
 }
 .clip-handle-right {
   right: 0;
-  background: linear-gradient(270deg, rgba(255, 255, 255, 0.18), transparent);
+  background: linear-gradient(270deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.04));
+}
+.clip-handle-right::after {
+  left: auto;
+  right: 5px;
 }
 .clip:hover .clip-handle,
 .clip.is-selected .clip-handle {

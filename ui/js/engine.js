@@ -24,6 +24,7 @@ export function createEngine({ canvas, store }) {
   const scanTile = buildScanTile();
   let audioCtx = null;
   let masterGain = null;
+  let masterVolume = 1;
   let exportDest = null;
 
   function project() {
@@ -38,16 +39,30 @@ export function createEngine({ canvas, store }) {
     if (audioCtx) return audioCtx;
     const Ctor = window.AudioContext || window.webkitAudioContext;
     if (!Ctor) return null;
-    audioCtx = new Ctor({ sampleRate: 48000 });
-    masterGain = audioCtx.createGain();
-    masterGain.gain.value = 1;
-    masterGain.connect(audioCtx.destination);
+    // Some embedded webviews reject a requested sample rate. Keep native media
+    // playback available in that case instead of leaving every element silent.
+    try {
+      try {
+        audioCtx = new Ctor({ sampleRate: 48000 });
+      } catch {
+        audioCtx = new Ctor();
+      }
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(audioCtx.destination);
+    } catch (error) {
+      console.warn('Web Audio unavailable; using native media audio', error);
+      audioCtx = null;
+      masterGain = null;
+      return null;
+    }
     return audioCtx;
   }
 
   function setMasterVolume(value) {
+    masterVolume = clamp(value, 0, 1.5);
     ensureAudio();
-    if (masterGain) masterGain.gain.value = clamp(value, 0, 1.5);
+    if (masterGain) masterGain.gain.value = masterVolume;
   }
 
   /** Size of a clip's drawn box in frame pixels, before its transform. */
@@ -105,7 +120,9 @@ export function createEngine({ canvas, store }) {
     el.playsInline = true;
     el.crossOrigin = 'anonymous';
     el.muted = false;
-    el.volume = 0;
+    // A media element routed through Web Audio must be muted natively to avoid
+    // double output. Without Web Audio, native volume is the only audio path.
+    el.volume = mediaCtx ? 0 : 1;
     // If the asset protocol refuses the CORS request, fall back to a plain load so the
     // picture still plays (audio routing then degrades to the element's own output).
     el.addEventListener(
@@ -684,7 +701,7 @@ export function createEngine({ canvas, store }) {
         if (Math.abs((el.playbackRate || 1) - rate) > 0.01) el.playbackRate = rate;
         const gainValue = track.muted || clip.muted ? 0 : volumeAt(clip, time);
         if (entry.gain) entry.gain.gain.value = gainValue;
-        else el.volume = clamp(gainValue, 0, 1);
+        else el.volume = clamp(gainValue * masterVolume, 0, 1);
         if (playing && el.paused) {
           const promise = el.play();
           if (promise && promise.catch) promise.catch(() => {});

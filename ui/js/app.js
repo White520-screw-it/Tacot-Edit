@@ -147,8 +147,9 @@ async function ingestPaths(paths) {
   if (!paths || !paths.length) return;
   for (const path of paths) {
     try {
+      // Browser File objects are read locally; desktop paths use the native importer.
       // eslint-disable-next-line no-await-in-loop
-      const stored = await platform.importPath(path);
+      const stored = typeof File !== 'undefined' && path instanceof File ? await platform.importFile(path) : await platform.importPath(path);
       // eslint-disable-next-line no-await-in-loop
       const described = await platform.describeMedia(stored);
       addMedia(described);
@@ -987,7 +988,27 @@ function bindTopBar() {
 }
 
 async function bindFileDrop() {
-  if (!platform.hasTauri) return;
+  if (!platform.hasTauri) {
+    let dragDepth = 0;
+    window.addEventListener('dragenter', (event) => {
+      if (!event.dataTransfer?.types?.includes('Files')) return;
+      event.preventDefault(); dragDepth += 1; ui.dropOverlay.classList.add('is-visible');
+    });
+    window.addEventListener('dragover', (event) => {
+      if (event.dataTransfer?.types?.includes('Files')) event.preventDefault();
+    });
+    window.addEventListener('dragleave', (event) => {
+      if (!event.dataTransfer?.types?.includes('Files')) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) ui.dropOverlay.classList.remove('is-visible');
+    });
+    window.addEventListener('drop', async (event) => {
+      if (!event.dataTransfer?.files?.length) return;
+      event.preventDefault(); dragDepth = 0; ui.dropOverlay.classList.remove('is-visible');
+      await ingestPaths([...event.dataTransfer.files]);
+    });
+    return;
+  }
   const { listen } = await import('./tauri.js');
   await listen('tauri://drag-enter', () => ui.dropOverlay.classList.add('is-visible'));
   await listen('tauri://drag-leave', () => ui.dropOverlay.classList.remove('is-visible'));
@@ -999,6 +1020,10 @@ async function bindFileDrop() {
 }
 
 async function boot() {
+  await platform.initBrowserStorage?.();
+  document.getElementById('driveButton')?.addEventListener('click', () => {
+    platform.setDriveProject?.(JSON.stringify(store.state.project));
+  });
   timeline = createTimeline({
     store,
     onSeek: (time) => store.seek(time),

@@ -1,0 +1,20 @@
+name = "tacot-edit-proxy"
+main = "worker.mjs"
+account_id = "c6d5cde2036c9ae7dfd2f83004f47800"
+compatibility_date = "2026-11-24"
+workers_dev = false
+
+[[kv_namespaces]]
+binding = "DOWNLOADS"
+id = "492a63fa35174b2297a6d09a6543270b"
+
+[[routes]]
+pattern = "editor.tacot.org"
+custom_domain = true
+
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+run_worker_first = true
+not_found_handling = "none"
+html_handling = "auto-trailing-slash"
