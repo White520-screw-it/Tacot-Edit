@@ -20,6 +20,7 @@ import {
   duplicateClip,
   splitClip,
   rippleClose,
+  trimClip,
 } from './model.js';
 import { bytesLabel, effectLabel } from './labels.js';
 import { CAPTION_STYLES } from './auto-model.js';
@@ -699,6 +700,7 @@ export function createPanels({ store, engine, timeline, app, auto }) {
       }),
     );
     if (clip.kind !== 'text') {
+      const sourceLimit = media && media.kind !== 'image' && media.duration > 0 ? media.duration : 3600;
       timing.inner.appendChild(
         gestureField({
           label: 'Speed',
@@ -723,7 +725,7 @@ export function createPanels({ store, engine, timeline, app, auto }) {
           label: 'In point',
           value: clip.in,
           min: 0,
-          max: Math.max(1, (media?.duration || clip.out) - 0.1),
+          max: Math.max(1, sourceLimit - 0.1),
           step: 0.01,
           format: (value) => `${value.toFixed(2)}s`,
           onInput: (value) => store.live(() => { clip.in = Math.min(value, clip.out - 0.1); }),
@@ -734,7 +736,7 @@ export function createPanels({ store, engine, timeline, app, auto }) {
           label: 'Out point',
           value: clip.out,
           min: clip.in + 0.1,
-          max: Math.max(clip.in + 0.2, media?.duration || clip.out + 5),
+          max: Math.max(clip.in + 0.2, sourceLimit),
           step: 0.01,
           format: (value) => `${value.toFixed(2)}s`,
           onInput: (value) => store.live(() => { clip.out = Math.max(value, clip.in + 0.1); }),
@@ -753,6 +755,37 @@ export function createPanels({ store, engine, timeline, app, auto }) {
         }),
       );
     }
+    const trimRow = el('div', 'speed-chips');
+    const playheadNow = store.state.playhead;
+    const insideClip =
+      playheadNow > clip.start + 0.05 && playheadNow < clip.start + clipDuration(clip) - 0.05;
+    const trimTo = (edge) => {
+      store.mutate('trim clip', () => {
+        trimClip(clip, edge, store.state.playhead, 0.1);
+      });
+    };
+    const addTrim = (label, title, run, disabled = false) => {
+      const button = el('button', `chip-btn${disabled ? ' is-off' : ''}`, label);
+      button.type = 'button';
+      button.title = title;
+      button.disabled = disabled;
+      button.addEventListener('click', run);
+      trimRow.appendChild(button);
+    };
+    addTrim('⇤ start', 'Trim the clip start to the playhead ( [ )', () => trimTo('start'), !insideClip);
+    addTrim('end ⇥', 'Trim the clip end to the playhead ( ] )', () => trimTo('end'), !insideClip);
+    const rate = clip.speed > 0 ? clip.speed : 1;
+    addTrim('−1s', 'Cut one second off the end', () =>
+      store.mutate('shorten clip', () => {
+        clip.out = Math.max(clip.in + 0.1, clip.out - (clip.kind === 'text' ? 1 : rate));
+      }),
+    );
+    addTrim('+1s', 'Add one second to the end', () =>
+      store.mutate('lengthen clip', () => {
+        clip.out = clip.in + Math.max(0.1, clipDuration(clip) + 1) * (clip.kind === 'text' ? 1 : rate);
+      }),
+    );
+    timing.inner.appendChild(trimRow);
     wrap.appendChild(timing.details);
 
     const transform = section('Transform');

@@ -1904,8 +1904,9 @@ input[type="range"]:disabled {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 14px;
+  width: 18px;
   cursor: ew-resize;
+  touch-action: none;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.04));
   opacity: 0.72;
   transition: opacity 0.12s ease;

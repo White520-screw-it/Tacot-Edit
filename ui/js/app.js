@@ -25,6 +25,7 @@ import {
   clamp,
   rangeWindow,
   sortTracks,
+  trimClip,
 } from './model.js';
 
 const store = createStore(createProject('Untitled Project'));
@@ -725,6 +726,24 @@ async function checkForUpdate(options = {}) {
   }
 }
 
+function trimSelectedToPlayhead(edge) {
+  const entry = store.selected();
+  if (!entry) {
+    toast('Select a clip first', 'info');
+    return;
+  }
+  const time = store.state.playhead;
+  const span = clipDuration(entry.clip);
+  if (time <= entry.clip.start + 0.05 || time >= entry.clip.start + span - 0.05) {
+    toast('Park the playhead inside the clip to trim it', 'info');
+    return;
+  }
+  store.mutate('trim clip', () => {
+    trimClip(entry.clip, edge, time, 0.1);
+  });
+  toast(edge === 'start' ? 'Trimmed the start to the playhead' : 'Trimmed the end to the playhead', 'info');
+}
+
 function bindKeys() {
   window.addEventListener('keydown', (event) => {
     const mod = event.ctrlKey || event.metaKey;
@@ -759,6 +778,14 @@ function bindKeys() {
         break;
       case 'End':
         store.seek(sequenceDuration(project()));
+        break;
+      case '[':
+        event.preventDefault();
+        trimSelectedToPlayhead('start');
+        break;
+      case ']':
+        event.preventDefault();
+        trimSelectedToPlayhead('end');
         break;
       case 'Delete':
       case 'Backspace':

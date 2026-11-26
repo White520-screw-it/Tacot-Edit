@@ -50,7 +50,7 @@ export async function renderToFile(options) {
   const mime = pickMime();
   if (!mime) throw new Error('no supported recording format');
 
-  const audioDest = engine.audioDestination();
+  const audioDest = await engine.beginExportAudio();
   engine.resumeAudio();
 
   const stream = canvas.captureStream(fps);
@@ -113,6 +113,7 @@ export async function renderToFile(options) {
   if (recorder.state !== 'inactive') recorder.stop();
   await stopped;
   engine.pauseAll();
+  await engine.endExportAudio();
 
   onProgress?.(0.97, duration);
   onStatus?.('Saving…');

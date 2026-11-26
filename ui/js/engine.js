@@ -26,6 +26,8 @@ export function createEngine({ canvas, store }) {
   let masterGain = null;
   let masterVolume = 1;
   let exportDest = null;
+  let exportMode = false;
+  const exportPool = new Map(); // media.key -> { el, gain, blobUrl } for the export mixer
 
   function project() {
     return store.state.project;
@@ -113,16 +115,13 @@ export function createEngine({ canvas, store }) {
     const existing = pools.get(clip.id);
     if (existing && existing.url === media.path) return existing.el;
 
-    const mediaCtx = ensureAudio();
     const el = document.createElement(media.kind === 'audio' ? 'audio' : 'video');
     const url = fileUrl(media.path);
     el.preload = 'auto';
     el.playsInline = true;
     el.crossOrigin = 'anonymous';
     el.muted = false;
-    // A media element routed through Web Audio must be muted natively to avoid
-    // double output. Without Web Audio, native volume is the only audio path.
-    el.volume = mediaCtx ? 0 : 1;
+    el.volume = 0;
     // If the asset protocol refuses the CORS request, fall back to a plain load so the
     // picture still plays (audio routing then degrades to the element's own output).
     el.addEventListener(
@@ -136,20 +135,10 @@ export function createEngine({ canvas, store }) {
       { once: true },
     );
     el.src = url;
-    let gain = null;
-    if (mediaCtx) {
-      try {
-        const source = mediaCtx.createMediaElementSource(el);
-        gain = mediaCtx.createGain();
-        gain.gain.value = 0;
-        source.connect(gain);
-        gain.connect(masterGain);
-      } catch {
-        el.volume = 1;
-        gain = null;
-      }
-    }
-    pools.set(clip.id, { el, gain, url: media.path, kind: 'video' });
+    // Preview audio plays straight from the element. Routing asset-protocol media through
+    // Web Audio makes Chromium output silence: a MediaElementAudioSourceNode is muted for
+    // cross-origin sources, which is exactly what the asset protocol is.
+    pools.set(clip.id, { el, gain: null, url: media.path, kind: 'video' });
     return el;
   }
 
@@ -675,6 +664,10 @@ export function createEngine({ canvas, store }) {
   // ---------------------------------------------------------------- audio + sync
 
   function sync(time, playing) {
+    if (exportMode) {
+      syncExport(time, playing);
+      return;
+    }
     const tracks = project().tracks;
     for (const track of tracks) {
       for (const clip of track.clips) {
@@ -700,8 +693,8 @@ export function createEngine({ canvas, store }) {
         }
         if (Math.abs((el.playbackRate || 1) - rate) > 0.01) el.playbackRate = rate;
         const gainValue = track.muted || clip.muted ? 0 : volumeAt(clip, time);
-        if (entry.gain) entry.gain.gain.value = gainValue;
-        else el.volume = clamp(gainValue * masterVolume, 0, 1);
+        el.volume = clamp(gainValue * masterVolume, 0, 1);
+        el.muted = gainValue <= 0.0001;
         if (playing && el.paused) {
           const promise = el.play();
           if (promise && promise.catch) promise.catch(() => {});
@@ -709,6 +702,114 @@ export function createEngine({ canvas, store }) {
         if (!playing && !el.paused) el.pause();
       }
     }
+  }
+
+  /** Drive the export mixer, which plays its own blob-backed copies of each clip's media. */
+  function syncExport(time, playing) {
+    for (const track of project().tracks) {
+      for (const clip of track.clips) {
+        if (!clip.mediaKey || clip.kind === 'text') continue;
+        const voice = exportPool.get(clip.mediaKey);
+        if (!voice) continue;
+        const el = voice.el;
+        const active = time >= clip.start - 0.02 && time < clipEnd(clip) + 0.02;
+        if (!active) {
+          if (!el.paused) el.pause();
+          voice.gain.gain.value = 0;
+          continue;
+        }
+        const source = sourceTimeAt(clip, time);
+        if (Math.abs((el.currentTime || 0) - source) > 0.25) {
+          try {
+            el.currentTime = source;
+          } catch {
+            /* seeking unsupported */
+          }
+        }
+        const rate = clamp(clip.speed || 1, 0.0625, 16);
+        if (Math.abs((el.playbackRate || 1) - rate) > 0.01) el.playbackRate = rate;
+        const gainValue = track.muted || clip.muted ? 0 : volumeAt(clip, time);
+        voice.gain.gain.value = clamp(gainValue, 0, 2);
+        if (playing && el.paused) {
+          const promise = el.play();
+          if (promise && promise.catch) promise.catch(() => {});
+        }
+        if (!playing && !el.paused) el.pause();
+      }
+    }
+  }
+
+  /**
+   * Build the rendering mixer. Each clip's media is fetched once and played from a
+   * same-origin blob URL, so the Web Audio graph is not tainted and the recording keeps
+   * its sound (asset-protocol sources would record silence).
+   */
+  async function beginExportAudio() {
+    await endExportAudio();
+    const context = ensureAudio();
+    if (!context) return null;
+    if (masterGain) masterGain.gain.value = masterVolume;
+    const destination = audioDestination();
+    resumeAudio();
+    for (const media of project().media.filter((item) => item.kind !== 'image')) {
+      let url = fileUrl(media.path);
+      let blobUrl = null;
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const blob = await response.blob();
+          if (blob.size > 0) {
+            blobUrl = URL.createObjectURL(blob);
+            url = blobUrl;
+          }
+        }
+      } catch {
+        /* the asset URL still plays; the mixer just stays silent for this clip */
+      }
+      const el = document.createElement(media.kind === 'audio' ? 'audio' : 'video');
+      el.preload = 'auto';
+      el.playsInline = true;
+      el.muted = false;
+      let gain = null;
+      try {
+        const source = context.createMediaElementSource(el);
+        gain = context.createGain();
+        gain.gain.value = 0;
+        source.connect(gain);
+        gain.connect(masterGain);
+      } catch {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        continue;
+      }
+      el.src = url;
+      exportPool.set(media.key, { el, gain, blobUrl });
+    }
+    exportMode = true;
+    return destination;
+  }
+
+  async function endExportAudio() {
+    exportMode = false;
+    for (const voice of exportPool.values()) {
+      try {
+        voice.el.pause();
+      } catch {
+        /* already stopped */
+      }
+      try {
+        voice.gain.disconnect();
+      } catch {
+        /* already disconnected */
+      }
+      try {
+        voice.el.removeAttribute('src');
+        voice.el.load();
+      } catch {
+        /* element already torn down */
+      }
+      if (voice.blobUrl) URL.revokeObjectURL(voice.blobUrl);
+    }
+    exportPool.clear();
   }
 
   function tick(time, playing) {
@@ -734,10 +835,14 @@ export function createEngine({ canvas, store }) {
     for (const entry of pools.values()) {
       if (entry.el && entry.el.pause && !entry.el.paused) entry.el.pause();
     }
+    for (const voice of exportPool.values()) {
+      if (voice.el && !voice.el.paused) voice.el.pause();
+    }
   }
 
   function dispose() {
     pauseAll();
+    endExportAudio();
     invalidate();
     if (audioCtx) audioCtx.close().catch(() => {});
     audioCtx = null;
@@ -751,6 +856,8 @@ export function createEngine({ canvas, store }) {
     prune: prunePool,
     pauseAll,
     audioDestination,
+    beginExportAudio,
+    endExportAudio,
     resumeAudio,
     setMasterVolume,
     measureClipBox,
