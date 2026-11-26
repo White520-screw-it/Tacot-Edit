@@ -563,9 +563,29 @@ export function createPanels({ store, engine, timeline, app, auto }) {
 
   // ---------------------------------------------------------------- inspector
 
+  let textFocusId = null;
+
   function renderInspector() {
     const selected = store.selected();
     inspectorEl.replaceChildren(selected ? clipInspector(selected) : projectInspector());
+    if (!textFocusId) return;
+    const pending = textFocusId;
+    textFocusId = null;
+    if (!selected || selected.clip.id !== pending) return;
+    requestAnimationFrame(() => {
+      const area = inspectorEl.querySelector('.text-area');
+      if (!area) return;
+      const panel = area.closest('details');
+      if (panel) panel.open = true;
+      area.focus();
+      area.select();
+    });
+  }
+
+  /** Put the caret in a text clip's content field, ready to type over it. */
+  function focusText(clipId) {
+    textFocusId = clipId;
+    renderInspector();
   }
 
   function projectInspector() {
@@ -1224,5 +1244,5 @@ export function createPanels({ store, engine, timeline, app, auto }) {
     renderBody();
   }
 
-  return { render, renderInspector, setTab };
+  return { render, renderInspector, setTab, focusText };
 }

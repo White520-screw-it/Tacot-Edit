@@ -25,6 +25,7 @@ import {
   clamp,
   rangeWindow,
   sortTracks,
+  transformAt,
   trimClip,
 } from './model.js';
 
@@ -32,9 +33,56 @@ const store = createStore(createProject('Untitled Project'));
 const canvas = document.getElementById('canvas');
 const engine = createEngine({ canvas, store });
 const automation = createAutomation({ store, engine });
+bindMonitorClicks();
 
 let timeline = null;
 let panels = { render: () => {}, renderInspector: () => {} };
+/** Topmost text clip under a point in the program monitor, if any. */
+function textClipAt(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const px = (clientX - rect.left) / (rect.width / project().width);
+  const py = (clientY - rect.top) / (rect.height / project().height);
+  const time = store.state.playhead;
+  let hit = null;
+  for (const track of project().tracks) {
+    if (track.hidden) continue;
+    for (const clip of track.clips) {
+      if (clip.kind !== 'text' || !clip.text) continue;
+      if (time < clip.start || time >= clipEnd(clip)) continue;
+      const tr = transformAt(clip, time);
+      const box = engine.measureClipBox(clip);
+      const halfWidth = (box.width * tr.scale) / 2;
+      const halfHeight = (box.height * tr.scale) / 2;
+      const cx = project().width / 2 + tr.x * project().width;
+      const cy = project().height / 2 + tr.y * project().height;
+      if (Math.abs(px - cx) <= halfWidth && Math.abs(py - cy) <= halfHeight) hit = { clip, track };
+    }
+  }
+  return hit;
+}
+
+function bindMonitorClicks() {
+  canvas.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    const hit = textClipAt(event.clientX, event.clientY);
+    if (hit) store.select(hit.clip.id, hit.track.id);
+  });
+  canvas.addEventListener('dblclick', (event) => {
+    const hit = textClipAt(event.clientX, event.clientY);
+    if (!hit) return;
+    store.select(hit.clip.id, hit.track.id);
+    panels.focusText?.(hit.clip.id);
+  });
+  document.addEventListener('tacot:edit-text', (event) => {
+    const id = event.detail && event.detail.clipId;
+    const entry = store.findClip(id);
+    if (!entry) return;
+    store.select(entry.clip.id, entry.track.id);
+    panels.focusText?.(entry.clip.id);
+  });
+}
+
 const previewControls = createPreviewControls({
   store,
   engine,
@@ -726,6 +774,17 @@ async function checkForUpdate(options = {}) {
   }
 }
 
+function nudgeSelectedClip(delta) {
+  const entry = store.selected();
+  if (!entry) {
+    toast('Select a clip to nudge', 'info');
+    return;
+  }
+  store.mutate('nudge clip', () => {
+    entry.clip.start = Math.max(0, entry.clip.start + delta);
+  });
+}
+
 function trimSelectedToPlayhead(edge) {
   const entry = store.selected();
   if (!entry) {
@@ -767,11 +826,33 @@ function bindKeys() {
         break;
       case 'ArrowLeft':
         event.preventDefault();
+        if (event.altKey) {
+          nudgeSelectedClip(-(event.shiftKey ? 10 : 1) / project().fps);
+          break;
+        }
         store.seek(store.state.playhead - (event.shiftKey ? 1 : frame));
         break;
       case 'ArrowRight':
         event.preventDefault();
+        if (event.altKey) {
+          nudgeSelectedClip((event.shiftKey ? 10 : 1) / project().fps);
+          break;
+        }
         store.seek(store.state.playhead + (event.shiftKey ? 1 : frame));
+        break;
+      case 'q':
+      case 'Q':
+        if (!mod) {
+          event.preventDefault();
+          trimSelectedToPlayhead('start');
+        }
+        break;
+      case 'w':
+      case 'W':
+        if (!mod) {
+          event.preventDefault();
+          trimSelectedToPlayhead('end');
+        }
         break;
       case 'Home':
         store.seek(0);

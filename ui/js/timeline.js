@@ -503,6 +503,9 @@ export function createTimeline({ store, onSelect, onSeek }) {
     if (!entry) return;
     onSeek(entry.clip.start);
     onSelect(entry.clip.id);
+    if (entry.clip.kind === 'text') {
+      document.dispatchEvent(new CustomEvent('tacot:edit-text', { detail: { clipId: entry.clip.id } }));
+    }
   }
 
   function bind() {
