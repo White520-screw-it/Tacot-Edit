@@ -1,17 +1,16 @@
-# Tacot Edit 0.2.3 installer, downloaded in parts and rebuilt.
-# Right-click this file and choose "Run with PowerShell", or run:
-#   powershell -ExecutionPolicy Bypass -File .\download-installer.ps1
+# Tacot Edit 0.2.4 installer, downloaded in parts and rebuilt.
+# Run:  powershell -ExecutionPolicy Bypass -File .\download-installer.ps1
 
 $ErrorActionPreference = 'Stop'
 
-$base = 'https://github.com/White520-screw-it/Tacot-Edit/releases/download/v0.2.3'
+$base = 'https://github.com/White520-screw-it/Tacot-Edit/releases/download/v0.2.4'
 $suffixes = @('aa', 'ab', 'ac', 'ad', 'ae', 'af', 'ag', 'ah')
-$expected = 164448722
-$out = Join-Path $env:TEMP 'Tacot-Edit-Setup-0.2.3.exe'
+$expected = 164421550
+$out = Join-Path $env:TEMP 'Tacot-Edit-Setup-0.2.4.exe'
 
 foreach ($suffix in $suffixes) {
     $part = "$out.part-$suffix"
-    $url = "$base/Tacot-Edit-Setup-0.2.3.exe.part-$suffix"
+    $url = "$base/Tacot-Edit-Setup-0.2.4.exe.part-$suffix"
     Write-Host "Downloading part-$suffix"
     Invoke-WebRequest -Uri $url -OutFile $part -UseBasicParsing
 }
