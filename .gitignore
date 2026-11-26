@@ -3,3 +3,5 @@ src-tauri/target/
 *.log
 .DS_Store
 dist/
+release.json
+release-payload.json
