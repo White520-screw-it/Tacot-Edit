@@ -356,7 +356,12 @@ export function createTimeline({ store, onSelect, onSeek }) {
       node,
       group,
     };
-    node.setPointerCapture?.(event.pointerId);
+    try {
+      node.setPointerCapture?.(event.pointerId);
+    } catch {
+      // A pointer that is not active (synthetic, or a webview quirk) must not stop the drag:
+      // the window listeners below still track the gesture.
+    }
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp, { once: true });
   }
