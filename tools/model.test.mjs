@@ -15,6 +15,9 @@ import {
   deleteClip,
   duplicateClip,
   trimClip,
+  rippleShift,
+  rollTrim,
+  slipClip,
   upsertKeyframe,
   removeKeyframe,
   keyedValue,
@@ -335,6 +338,51 @@ test('rangeWindow ignores unset or inverted ranges', () => {
   assert.equal(rangeWindow(project).active, false);
   project.range = { in: 0, out: 10 };
   assert.equal(rangeWindow(project).active, false);
+});
+
+test('a trim stops at the end of the footage instead of freezing a frame', () => {
+  const clip = createClip('video', { start: 0, out: 5 });
+  trimClip(clip, 'end', 9, 0.1, 5);
+  assert.equal(clip.out, 5);
+  trimClip(clip, 'end', 3, 0.1, 5);
+  assert.equal(clip.out, 3);
+});
+
+test('ripple shift closes a gap without touching the edited clip', () => {
+  const track = createTrack('video');
+  const first = createClip('video', { start: 0, out: 4 });
+  const second = createClip('video', { start: 4, out: 4 });
+  const third = createClip('video', { start: 8, out: 4 });
+  track.clips.push(first, second, third);
+  trimClip(first, 'end', 3, 0.1);
+  rippleShift(track, first.id, clipEnd(first), -1);
+  assert.equal(clipEnd(first), 3);
+  assert.equal(second.start, 3);
+  assert.equal(third.start, 7);
+});
+
+test('slip moves the source window only, and never before frame zero', () => {
+  const clip = createClip('video', { start: 4, out: 4 });
+  const shift = slipClip(clip, 0.5, 10);
+  assert.equal(shift, 0.5);
+  assert.equal(clip.in, 0.5);
+  assert.equal(clip.out, 4.5);
+  assert.equal(clip.start, 4);
+  assert.equal(slipClip(clip, -9, 10), -0.5);
+  assert.equal(clip.in, 0);
+});
+
+test('roll keeps the pair length and refuses a non-adjacent cut', () => {
+  const left = createClip('video', { start: 0, out: 4 });
+  const right = createClip('video', { start: 4, out: 4 });
+  right.in = 1;
+  right.out = 5;
+  assert.equal(rollTrim(left, right, 4.6, 0.1), true);
+  assert.equal(clipEnd(left), 4.6);
+  assert.equal(right.start, 4.6);
+  assert.equal(clipEnd(right), 8);
+  const apart = createClip('video', { start: 9, out: 4 });
+  assert.equal(rollTrim(left, apart, 5, 0.1), false);
 });
 
 test('keyframeTimes lists each keyed instant once, in order', () => {

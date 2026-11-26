@@ -20,6 +20,7 @@ import {
   formatTimecode,
   rippleClose,
   sequenceDuration,
+  sourceDurationFor,
   splitClip,
   trackKindFor,
   clamp,
@@ -135,6 +136,10 @@ function setPlaying(playing) {
   if (store.state.exportBusy) return;
   const duration = sequenceDuration(store.state.project);
   if (playing && store.state.playhead >= duration - 0.02) store.state.playhead = 0;
+  if (!playing) {
+    store.state.playRate = 1;
+    engine.setPlayRate(1);
+  }
   store.state.playing = playing;
   if (playing) engine.resumeAudio();
   else engine.pauseAll();
@@ -150,7 +155,8 @@ function loop(now) {
     const window = rangeWindow(store.state.project);
     const startAt = window.active ? window.start : 0;
     const duration = window.active ? window.end : sequenceDuration(store.state.project);
-    let next = store.state.playhead + dt;
+    const rate = store.state.playRate || 1;
+    let next = store.state.playhead + dt * rate;
     if (next >= duration) {
       if (store.state.loop) next = startAt;
       else {
@@ -158,10 +164,20 @@ function loop(now) {
         setPlaying(false);
       }
     }
+    if (next <= startAt) {
+      if (store.state.loop) next = duration;
+      else {
+        next = startAt;
+        setPlaying(false);
+      }
+    }
     store.state.playhead = next;
     store.notify('playhead');
   }
-  engine.tick(store.state.playhead, store.state.playing);
+  // Reverse playback is picture-only: media elements cannot play backwards, so the audio
+  // stays paused while the playhead walks back over the timeline.
+  const forward = store.state.playing && (store.state.playRate || 1) > 0;
+  engine.tick(store.state.playhead, forward);
   requestAnimationFrame(loop);
 }
 
@@ -799,6 +815,18 @@ async function checkForUpdate(options = {}) {
   }
 }
 
+function shuttle(direction) {
+  const playing = store.state.playing;
+  const current = store.state.playRate || 1;
+  let rate;
+  if (direction > 0) rate = !playing || current < 0 ? 1 : Math.min(8, current * 2);
+  else rate = !playing || current > 0 ? -1 : Math.max(-8, current * 2);
+  store.state.playRate = rate;
+  engine.setPlayRate(rate);
+  setPlaying(true);
+  toast(rate > 0 ? `Playing ${rate}×` : `Reverse ${Math.abs(rate)}× — picture only`, 'info');
+}
+
 function nudgeSelectedClip(delta) {
   const entry = store.selected();
   if (!entry) {
@@ -823,7 +851,7 @@ function trimSelectedToPlayhead(edge) {
     return;
   }
   store.mutate('trim clip', () => {
-    trimClip(entry.clip, edge, time, 0.1);
+    trimClip(entry.clip, edge, time, 0.1, sourceDurationFor(store.state.project, entry.clip));
   });
   toast(edge === 'start' ? 'Trimmed the start to the playhead' : 'Trimmed the end to the playhead', 'info');
 }
@@ -898,6 +926,28 @@ function bindKeys() {
         event.preventDefault();
         if (event.shiftKey) rippleDeleteSelected();
         else deleteSelected();
+        break;
+      case 'j':
+      case 'J':
+        if (!mod) {
+          event.preventDefault();
+          shuttle(-1);
+        }
+        break;
+      case 'k':
+      case 'K':
+        if (!mod) {
+          event.preventDefault();
+          setPlaying(false);
+          store.state.playRate = 1;
+        }
+        break;
+      case 'l':
+      case 'L':
+        if (!mod) {
+          event.preventDefault();
+          shuttle(1);
+        }
         break;
       case 'm':
       case 'M':

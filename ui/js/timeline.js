@@ -8,8 +8,12 @@ import {
   placeClip,
   snapCandidates,
   snapTime,
+  sourceDurationFor,
   splitClip,
   trimClip,
+  rippleShift,
+  rollTrim,
+  slipClip,
   sequenceDuration,
   displayDuration,
   formatTimecode,
@@ -349,6 +353,11 @@ export function createTimeline({ store, onSelect, onSeek }) {
       originEnd: clipEnd(clip),
       originIn: clip.in,
       originOut: clip.out,
+      originSpeed: clip.speed > 0 ? clip.speed : 1,
+      mediaKey: clip.mediaKey,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey || event.metaKey,
+      slip: undefined,
       width: node.offsetWidth,
       moved: false,
       ghostTrack: track.id,
@@ -377,6 +386,21 @@ export function createTimeline({ store, onSelect, onSeek }) {
     const dy = event.clientY - dragging.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragging.moved = true;
     const deltaSeconds = dx / zoom();
+    // Modifiers can be pressed after the drag starts, so track them live and use the last
+    // value when the gesture is committed.
+    dragging.altKey = event.altKey;
+    dragging.ctrlKey = event.ctrlKey || event.metaKey;
+
+    if (dragging.mode === 'move' && event.altKey) {
+      // Slip: the clip stays put and its source window slides under it.
+      dragging.slip = deltaSeconds;
+      dragging.node.style.transform = 'none';
+      dragging.node.classList.add('is-slipping');
+      showSnapGuide(null);
+      return;
+    }
+    dragging.slip = undefined;
+    dragging.node.classList.remove('is-slipping');
 
     if (dragging.mode === 'move') {
       const targetTrack = trackAt(event.clientY) || dragging.trackId;
@@ -437,7 +461,13 @@ export function createTimeline({ store, onSelect, onSeek }) {
     const clipEntry = store.findClip(drag.clipId);
     if (!clipEntry) return;
 
-    if (drag.mode === 'move') {
+    if (drag.mode === 'move' && typeof drag.slip === 'number' && Math.abs(drag.slip) > 0.0005) {
+      const media = store.state.project.media.find((item) => item.key === clipEntry.clip.mediaKey);
+      store.mutate('slip clip', () => {
+        slipClip(clipEntry.clip, drag.slip, media ? media.duration : 0);
+      });
+      render();
+    } else if (drag.mode === 'move') {
       const targetTrack = trackAt(event.clientY) || drag.trackId;
       const candidates = snapCandidates(store.state.project, drag.clipId);
       const start = Math.max(0, snapTime(drag.ghostStart, candidates, 8 / zoom(), store.state.snap).time);
@@ -464,11 +494,28 @@ export function createTimeline({ store, onSelect, onSeek }) {
       });
       render();
     } else if (drag.pendingTrim !== undefined) {
-      store.mutate('trim clip', () => {
-        const clip = clipEntry.clip;
+      const track = clipEntry.track;
+      const clip = clipEntry.clip;
+      const edge = drag.mode === 'trim-start' ? 'start' : 'end';
+      const beforeStart = clip.start;
+      const beforeEnd = clipEnd(clip);
+      const neighbour = track.clips
+        .filter((item) => item.id !== clip.id)
+        .sort((a, b) => a.start - b.start)
+        .find((item) => Math.abs(item.start - clipEnd(clip)) < 0.05);
+      const roll = Boolean(drag.altKey && edge === 'end' && neighbour);
+      const sourceFor = (target) => sourceDurationFor(store.state.project, target);
+      store.mutate(roll ? 'roll edit' : drag.ctrlKey ? 'ripple trim' : 'trim clip', () => {
         const candidates = snapCandidates(store.state.project, drag.clipId);
         const target = snapTime(drag.pendingTrim, candidates, 8 / zoom(), store.state.snap).time;
-        trimClip(clip, drag.mode === 'trim-start' ? 'start' : 'end', target, 0.1);
+        if (roll) {
+          rollTrim(clip, neighbour, target, 0.1, sourceFor(clip), sourceFor(neighbour));
+          return;
+        }
+        trimClip(clip, edge, target, 0.1, sourceFor(clip));
+        if (!drag.ctrlKey) return;
+        if (edge === 'end') rippleShift(track, clip.id, clipEnd(clip), clipEnd(clip) - beforeEnd);
+        else rippleShift(track, clip.id, clip.start, clip.start - beforeStart);
       });
       render();
     }

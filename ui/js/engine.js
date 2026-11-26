@@ -18,6 +18,8 @@ const FONT_STACKS = Object.fromEntries(FONTS.map((font) => [font.id, font.stack]
 
 export function createEngine({ canvas, store }) {
   const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  // J/K/L shuttle speed for the preview only; exports always run at the clip's own speed.
+  let shuttleRate = 1;
   const pools = new Map(); // clip.id -> { el, gain, url, kind }
   const measureCanvas = document.createElement('canvas');
   const noiseTile = buildNoiseTile();
@@ -685,7 +687,7 @@ export function createEngine({ canvas, store }) {
           continue;
         }
         const source = sourceTimeAt(clip, time);
-        const rate = clamp(clip.speed || 1, 0.0625, 16);
+        const rate = clamp((clip.speed || 1) * shuttleRate, 0.0625, 16);
         if (Math.abs((el.currentTime || 0) - source) > 0.3) {
           try {
             el.currentTime = source;
@@ -862,6 +864,9 @@ export function createEngine({ canvas, store }) {
     endExportAudio,
     resumeAudio,
     setMasterVolume,
+    setPlayRate(value) {
+      shuttleRate = clamp(value > 0 ? value : 1, 0.0625, 8);
+    },
     measureClipBox,
     elementFor,
     drawTextClip,

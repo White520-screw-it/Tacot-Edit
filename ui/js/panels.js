@@ -21,6 +21,7 @@ import {
   splitClip,
   rippleClose,
   trimClip,
+  sourceDurationFor,
 } from './model.js';
 import { bytesLabel, effectLabel } from './labels.js';
 import { CAPTION_STYLES } from './auto-model.js';
@@ -784,7 +785,7 @@ export function createPanels({ store, engine, timeline, app, auto }) {
       playheadNow > clip.start + 0.05 && playheadNow < clip.start + clipDuration(clip) - 0.05;
     const trimTo = (edge) => {
       store.mutate('trim clip', () => {
-        trimClip(clip, edge, store.state.playhead, 0.1);
+        trimClip(clip, edge, store.state.playhead, 0.1, sourceDurationFor(store.state.project, clip));
       });
     };
     const addTrim = (label, title, run, disabled = false) => {

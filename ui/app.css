@@ -1742,6 +1742,10 @@ input[type="range"]:disabled {
 .clip:active {
   cursor: grabbing;
 }
+.clip.is-slipping {
+  outline: 2px dashed rgba(42, 214, 196, 0.9);
+  outline-offset: -2px;
+}
 .clip.is-selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(255, 92, 57, 0.55), 0 10px 22px -12px rgba(255, 92, 57, 0.8);

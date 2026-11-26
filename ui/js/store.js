@@ -7,6 +7,7 @@ export function createStore(project = createProject()) {
     selection: { clipId: null, trackId: null, extra: [] },
     playhead: 0,
     playing: false,
+    playRate: 1,
     zoom: 72,
     snap: true,
     tool: 'select',

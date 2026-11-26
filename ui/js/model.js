@@ -408,7 +408,7 @@ export function snapTime(value, candidates, threshold, enabled = true) {
 }
 
 /** Trim one edge of a clip, keeping the opposite edge fixed on the timeline. */
-export function trimClip(clip, edge, time, minDuration = 0.1) {
+export function trimClip(clip, edge, time, minDuration = 0.1, sourceDuration = 0) {
   const duration = clipDuration(clip);
   if (edge === 'start') {
     const maxStart = clip.start + duration - minDuration;
@@ -423,13 +423,15 @@ export function trimClip(clip, edge, time, minDuration = 0.1) {
     clip.start = Math.max(0, nextStart);
   } else {
     const minEnd = clip.start + minDuration;
-    const nextEnd = Math.max(minEnd, time);
-    if (clip.kind !== 'text') {
-      const speed = clip.speed > 0 ? clip.speed : 1;
-      clip.out = clip.in + (nextEnd - clip.start) * speed;
-    } else {
-      clip.out = clip.in + (nextEnd - clip.start);
-    }
+    const speed = clip.speed > 0 ? clip.speed : 1;
+    // Never pull a tail past the end of its footage: the picture would freeze on the last
+    // frame and the export would hold black.
+    const limit =
+      sourceDuration > 0 && clip.kind !== 'text'
+        ? clip.start + Math.max(0, sourceDuration - clip.in) / speed
+        : Infinity;
+    const nextEnd = Math.max(minEnd, Math.min(time, limit));
+    clip.out = clip.kind === 'text' ? clip.in + (nextEnd - clip.start) : clip.in + (nextEnd - clip.start) * speed;
   }
   return clip;
 }
@@ -579,6 +581,51 @@ export function rippleClose(project, trackId, atTime) {
   const after = track.clips.filter((clip) => clip.start > removed.start).sort((a, b) => a.start - b.start);
   for (const clip of after) clip.start = Math.max(0, round2(clip.start - gap));
   deleteClip(project, removed.id);
+}
+
+/**
+ * Move every clip on a track that starts at or after `fromTime`, except the edited one.
+ * This is the "close the gap" half of a ripple edit.
+ */
+export function rippleShift(track, clipId, fromTime, delta) {
+  if (!delta) return;
+  for (const clip of track.clips) {
+    if (clip.id === clipId) continue;
+    if (clip.start >= fromTime - 0.0005) clip.start = Math.max(0, round2(clip.start + delta));
+  }
+  sortClips(track);
+}
+
+/**
+ * Slide a clip's source window without moving it on the timeline: the classic slip edit.
+ * `mediaDuration` keeps the window inside the source footage.
+ */
+/** Length of the footage behind a clip, or 0 when it has none (titles, generated media). */
+export function sourceDurationFor(project, clip) {
+  if (!clip || !clip.mediaKey) return 0;
+  const media = (project.media || []).find((item) => item.key === clip.mediaKey);
+  return media && media.duration > 0 ? media.duration : 0;
+}
+
+export function slipClip(clip, deltaSeconds, mediaDuration = 0) {
+  const speed = clip.speed > 0 ? clip.speed : 1;
+  const span = clip.out - clip.in;
+  let shift = deltaSeconds * speed;
+  if (mediaDuration > 0) shift = Math.min(shift, Math.max(0, mediaDuration - clip.out));
+  shift = Math.max(shift, -clip.in);
+  if (Math.abs(shift) < 0.0005) return 0;
+  clip.in = round2(clip.in + shift);
+  clip.out = round2(clip.in + span);
+  return shift;
+}
+
+/** Move the cut between two touching clips, keeping the pair's total length. */
+export function rollTrim(left, right, time, minDuration = 0.1, leftSource = 0, rightSource = 0) {
+  if (Math.abs(clipEnd(left) - right.start) > 0.05) return false;
+  const end = Math.max(left.start + minDuration, Math.min(time, clipEnd(right) - minDuration));
+  trimClip(left, 'end', end, minDuration, leftSource);
+  trimClip(right, 'start', end, minDuration, rightSource);
+  return true;
 }
 
 export function duplicateClip(project, clipId) {
