@@ -648,7 +648,9 @@ export function createEngine({ canvas, store }) {
     const clips = track.clips;
     for (let index = 0; index < clips.length; index += 1) {
       const clip = clips[index];
-      if (time < clip.start || time >= clipEnd(clip)) continue;
+      // Inclusive at the end: parking the playhead on a cut should still show that clip's
+      // last frame, otherwise a selected title looks like it vanished.
+      if (time < clip.start || time > clipEnd(clip) + 0.0005) continue;
       const transition = clip.transition || { id: 'none', duration: 0 };
       const duration = transition.duration || 0;
       if (transition.id !== 'none' && duration > 0 && index > 0 && time < clip.start + duration) {
