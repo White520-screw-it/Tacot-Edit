@@ -1,7 +1,7 @@
 {
   "name": "tacot-edit",
   "private": true,
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Tacot Edit \u2014 multi-track timeline video editor",
   "type": "module",
   "scripts": {

@@ -707,6 +707,9 @@ export function createPanels({ store, engine, timeline, app, auto }) {
       el('p', 'inspector-sub', `${formatTimecode(clip.start, store.state.project.fps)} → ${formatTimecode(clip.start + clipDuration(clip), store.state.project.fps)}`),
     );
 
+    // A title's words are the first thing you want, so that section leads the inspector.
+    if (clip.kind === 'text') wrap.appendChild(textSection(clip));
+
     const timing = section('Timing');
     timing.inner.appendChild(
       gestureField({
@@ -1003,8 +1006,6 @@ export function createPanels({ store, engine, timeline, app, auto }) {
     wrap.appendChild(transition.details);
 
     wrap.appendChild(keyframeSection(clip));
-
-    if (clip.kind === 'text') wrap.appendChild(textSection(clip));
 
     const actions = el('div', 'row-buttons inspector-actions');
     actions.appendChild(iconButton('Split', 'Split at playhead (Ctrl+B)', () => app.splitAtPlayhead()));

@@ -1,6 +1,6 @@
 [package]
 name = "tacot-edit"
-version = "0.2.4"
+version = "0.2.5"
 description = "Tacot Edit — multi-track timeline video editor"
 edition = "2021"
 rust-version = "1.77"

@@ -719,7 +719,11 @@ if (palette.input) {
 
 // ------------------------------------------------------------- optional update
 
-const UPDATE_FEED = 'https://editor.tacot.org/updates.json';
+// Public releases on GitHub are the source of truth; the old page feed stays as a fallback.
+const UPDATE_FEEDS = [
+  'https://api.github.com/repos/White520-screw-it/Tacot-Edit/releases/latest',
+  'https://editor.tacot.org/updates.json',
+];
 let updateChecked = false;
 
 function compareVersions(a, b) {
@@ -732,8 +736,33 @@ function compareVersions(a, b) {
   return 0;
 }
 
+/** Latest published release, or null when nothing answers. */
+async function latestRelease() {
+  for (const feed of UPDATE_FEEDS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    try {
+      const response = await fetch(feed, { cache: 'no-store', signal: controller.signal });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const version = String(data.version || data.tag_name || '').replace(/^v/, '');
+      if (!version) continue;
+      return {
+        version,
+        url: data.html_url || data.url || 'https://github.com/White520-screw-it/Tacot-Edit/releases',
+        notes: data.body || '',
+      };
+    } catch {
+      /* this feed is unreachable: try the next one */
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return null;
+}
+
 /**
- * Ask the download page whether a newer build exists. Purely optional: nothing
+ * Ask the release feed whether a newer build exists. Purely optional: nothing
  * installs itself, and a newer version only lights up a chip the user can
  * click or ignore.
  */
@@ -746,12 +775,8 @@ async function checkForUpdate(options = {}) {
     } catch {
       /* preview build without the desktop shell: still allow the check */
     }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    const response = await fetch(UPDATE_FEED, { cache: 'no-store', signal: controller.signal });
-    clearTimeout(timer);
-    if (!response.ok) return null;
-    const info = await response.json();
+    const info = await latestRelease();
+    if (!info) return null;
     updateChecked = true;
     if (compareVersions(info.version, current) <= 0) {
       if (chip) chip.hidden = true;
