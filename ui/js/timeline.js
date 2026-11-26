@@ -368,6 +368,11 @@ export function createTimeline({ store, onSelect, onSeek }) {
 
   function onPointerMove(event) {
     if (!dragging) return;
+    // A re-render (selection, autosave, inspector) can replace the clip node, so always
+    // style the element that is currently in the DOM. Otherwise the drag moves a detached
+    // node and the clip only jumps into place on release.
+    const live = document.querySelector(`.clip[data-clip-id="${dragging.clipId}"]`);
+    if (live && live !== dragging.node) dragging.node = live;
     const dx = event.clientX - dragging.startX;
     const dy = event.clientY - dragging.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragging.moved = true;
@@ -378,29 +383,33 @@ export function createTimeline({ store, onSelect, onSeek }) {
       const track = store.state.project.tracks.find((item) => item.id === targetTrack);
       const candidates = snapCandidates(store.state.project, dragging.clipId);
       const raw = Math.max(0, dragging.originStart + deltaSeconds);
-      const snapped = snapTime(raw, candidates, 8 / zoom(), store.state.snap);
-      const snappedEnd = snapTime(raw + (dragging.originEnd - dragging.originStart), candidates, 8 / zoom(), store.state.snap);
-      const useEnd = Math.abs(snappedEnd.time - (raw + dragging.originEnd - dragging.originStart)) <
-        Math.abs(snapped.time - raw);
-      const nextStart = Math.max(0, useEnd ? snappedEnd.time - (dragging.originEnd - dragging.originStart) : snapped.time);
-      dragging.ghostStart = nextStart;
-      dragging.node.style.transform = `translateX(${(nextStart - dragging.originStart) * zoom()}px)`;
+      // Move with the pointer; snap once on release so the clip does not stutter between
+      // snap points while it is being dragged.
+      dragging.ghostStart = raw;
+      dragging.node.style.transform = `translateX(${(raw - dragging.originStart) * zoom()}px)`;
       dragging.node.classList.toggle('is-detached', Boolean(track && track.id !== dragging.trackId));
-      showSnapGuide(useEnd ? snappedEnd.snapped : snapped.snapped);
+      const probeStart = snapTime(raw, candidates, 8 / zoom(), store.state.snap);
+      const probeEnd = snapTime(raw + (dragging.originEnd - dragging.originStart), candidates, 8 / zoom(), store.state.snap);
+      const useEnd = Math.abs(probeEnd.time - (raw + dragging.originEnd - dragging.originStart)) < Math.abs(probeStart.time - raw);
+      showSnapGuide(useEnd ? probeEnd.snapped : probeStart.snapped);
     } else {
+      // Trim from the edge the drag started on, using the pointer delta. Mapping the raw
+      // cursor position to a time ignored the track-header offset, so one direction crept
+      // along and the other jumped.
       const candidates = snapCandidates(store.state.project, dragging.clipId);
-      const time = timeAt(event.clientX);
-      const snapped = snapTime(time, candidates, 8 / zoom(), store.state.snap);
-      showSnapGuide(snapped.snapped);
+      const threshold = 8 / zoom();
+      // Follow the pointer exactly while dragging; snapping is decided on release. Snapping
+      // every pointermove made the edge stick and jump in visible steps.
       if (dragging.mode === 'trim-start') {
-        const maxStart = dragging.originEnd - 0.1;
-        const nextStart = Math.max(0, Math.min(snapped.time, maxStart));
+        const nextStart = Math.max(0, Math.min(dragging.originStart + deltaSeconds, dragging.originEnd - 0.1));
+        showSnapGuide(snapTime(nextStart, candidates, threshold, store.state.snap).snapped);
         dragging.node.style.transform = 'none';
         dragging.node.style.left = `${nextStart * zoom()}px`;
         dragging.node.style.width = `${Math.max(14, (dragging.originEnd - nextStart) * zoom())}px`;
         dragging.pendingTrim = nextStart;
       } else if (dragging.mode === 'trim-end') {
-        const nextEnd = Math.max(dragging.originStart + 0.1, snapped.time);
+        const nextEnd = Math.max(dragging.originStart + 0.1, dragging.originEnd + deltaSeconds);
+        showSnapGuide(snapTime(nextEnd, candidates, threshold, store.state.snap).snapped);
         dragging.node.style.width = `${Math.max(14, (nextEnd - dragging.originStart) * zoom())}px`;
         dragging.pendingTrim = nextEnd;
       }
@@ -430,7 +439,8 @@ export function createTimeline({ store, onSelect, onSeek }) {
 
     if (drag.mode === 'move') {
       const targetTrack = trackAt(event.clientY) || drag.trackId;
-      const start = Math.max(0, drag.ghostStart);
+      const candidates = snapCandidates(store.state.project, drag.clipId);
+      const start = Math.max(0, snapTime(drag.ghostStart, candidates, 8 / zoom(), store.state.snap).time);
       const delta = start - drag.originStart;
       store.mutate('move clips', () => {
         const others = (drag.group || []).filter((item) => item.id !== drag.clipId);
@@ -456,7 +466,9 @@ export function createTimeline({ store, onSelect, onSeek }) {
     } else if (drag.pendingTrim !== undefined) {
       store.mutate('trim clip', () => {
         const clip = clipEntry.clip;
-        trimClip(clip, drag.mode === 'trim-start' ? 'start' : 'end', drag.pendingTrim, 0.1);
+        const candidates = snapCandidates(store.state.project, drag.clipId);
+        const target = snapTime(drag.pendingTrim, candidates, 8 / zoom(), store.state.snap).time;
+        trimClip(clip, drag.mode === 'trim-start' ? 'start' : 'end', target, 0.1);
       });
       render();
     }
