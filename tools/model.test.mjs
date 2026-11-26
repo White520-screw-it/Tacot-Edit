@@ -383,6 +383,12 @@ test('roll keeps the pair length and refuses a non-adjacent cut', () => {
   assert.equal(clipEnd(right), 8);
   const apart = createClip('video', { start: 9, out: 4 });
   assert.equal(rollTrim(left, apart, 5, 0.1), false);
+  // A leftward roll needs head frames in the right clip; without them nothing moves.
+  const stuckLeft = createClip('video', { start: 0, out: 4 });
+  const stuckRight = createClip('video', { start: 4, out: 4 });
+  assert.equal(rollTrim(stuckLeft, stuckRight, 3, 0.1), false);
+  assert.equal(clipEnd(stuckLeft), 4);
+  assert.equal(stuckRight.start, 4);
 });
 
 test('keyframeTimes lists each keyed instant once, in order', () => {

@@ -622,9 +622,21 @@ export function slipClip(clip, deltaSeconds, mediaDuration = 0) {
 /** Move the cut between two touching clips, keeping the pair's total length. */
 export function rollTrim(left, right, time, minDuration = 0.1, leftSource = 0, rightSource = 0) {
   if (Math.abs(clipEnd(left) - right.start) > 0.05) return false;
-  const end = Math.max(left.start + minDuration, Math.min(time, clipEnd(right) - minDuration));
+  const leftSpeed = left.speed > 0 ? left.speed : 1;
+  const rightSpeed = right.speed > 0 ? right.speed : 1;
+  // Both sides must give: the right clip can only lose as many frames as it already holds,
+  // and the left clip cannot grow past the end of its own footage. Rolling one side alone
+  // would tear a gap into the sequence, so the whole edit is refused when either side is out.
+  const minEnd = Math.max(left.start + minDuration, right.start - right.in / rightSpeed);
+  const maxEnd = Math.min(
+    clipEnd(right) - minDuration,
+    leftSource > 0 && left.kind !== 'text' ? left.start + Math.max(0, leftSource - left.in) / leftSpeed : Infinity,
+  );
+  if (minEnd > maxEnd) return false;
+  const end = Math.max(minEnd, Math.min(time, maxEnd));
+  if (Math.abs(end - clipEnd(left)) < 0.001) return false;
   trimClip(left, 'end', end, minDuration, leftSource);
-  trimClip(right, 'start', end, minDuration, rightSource);
+  trimClip(right, 'start', clipEnd(left), minDuration, rightSource);
   return true;
 }
 
